@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Assisted Pro Drawing Tool</title>
+    <style>
+        body { margin: 0; display: flex; height: 100vh; background: #222; font-family: sans-serif; overflow: hidden; }
+        
+        /* 사이드바 UI */
+        #toolbar { width: 250px; background: #333; color: white; padding: 20px; display: flex; flex-direction: column; gap: 20px; z-index: 10; box-shadow: 2px 0 10px rgba(0,0,0,0.5); }
+        h2 { font-size: 1.2rem; margin-top: 0; color: #00d1ff; }
+        .control-group { display: flex; flex-direction: column; gap: 8px; }
+        input[type="range"] { cursor: pointer; }
+        
+        /* 캔버스 레이어 시스템 */
+        #canvas-container { flex-grow: 1; position: relative; cursor: crosshair; }
+        canvas { position: absolute; top: 0; left: 0; touch-action: none; }
+        #bg-canvas { z-index: 1; background-color: #ffffff; } /* 배경 레이어 */
+        #drawing-canvas { z-index: 2; } /* 드로잉 레이어 */
+
+        .status { font-size: 0.8rem; color: #888; margin-top: auto; }
+    </style>
+</head>
+<body>
+
+    <div id="toolbar">
+        <h2>Drawing Tool v1.0</h2>
+        
+        <div class="control-group">
+            <label>Brush Color</label>
+            <input type="color" id="colorPicker" value="#000000">
+        </div>
+
+        <div class="control-group">
+            <label>Min/Max Brush Size</label>
+            <input type="range" id="sizePicker" min="1" max="50" value="10">
+            <span id="sizeValue">Max: 10px</span>
+        </div>
+
+        <button onclick="clearCanvas()">Clear Drawing</button>
+
+        <div class="status">
+            <p>Pressure Sensor: <span id="pressureVal">0.00</span></p>
+            <p>Layer: 2 (Multi-layer Mode)</p>
+        </div>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="bg-canvas"></canvas>
+        <canvas id="drawing-canvas"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('drawing-canvas');
+        const bgCanvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        const bgCtx = bgCanvas.getContext('2d');
+        
+        const colorPicker = document.getElementById('colorPicker');
+        const sizePicker = document.getElementById('sizePicker');
+        const sizeValue = document.getElementById('sizeValue');
+        const pressureDisplay = document.getElementById('pressureVal');
+
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        // 1. 캔버스 크기 초기화 (창 크기에 맞춤)
+        function resizeCanvas() {
+            const container = document.getElementById('canvas-container');
+            [canvas, bgCanvas].forEach(c => {
+                c.width = container.clientWidth;
+                c.height = container.clientHeight;
+            });
+            drawBackground();
+        }
+
+        // 배경 레이어에 격자무늬나 초기 배경색 칠하기
+        function drawBackground() {
+            bgCtx.fillStyle = "#ffffff";
+            bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+            // 격자무늬 예시
+            bgCtx.strokeStyle = "#eee";
+            bgCtx.lineWidth = 1;
+            for(let i=0; i<bgCanvas.width; i+=50) {
+                bgCtx.beginPath(); bgCtx.moveTo(i,0); bgCtx.lineTo(i,bgCanvas.height); bgCtx.stroke();
+            }
+            for(let i=0; i<bgCanvas.height; i+=50) {
+                bgCtx.beginPath(); bgCtx.moveTo(0,i); bgCtx.lineTo(bgCanvas.width,i); bgCtx.stroke();
+            }
+        }
+
+        // 2. 드로잉 핵심 로직 (Pointer Events 사용)
+        function startDrawing(e) {
+            isDrawing = true;
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+
+            // 필압 감지 (마우스는 기본 0.5, 타블렛은 0.0~1.0 사이 값 반환)
+            // 브라우저 및 하드웨어 지원에 따라 다를 수 있음
+            let pressure = e.pressure || 0.5;
+            if (e.pointerType === 'mouse' && !e.buttons) pressure = 0;
+            
+            pressureDisplay.innerText = pressure.toFixed(2);
+
+            const maxSize = sizePicker.value;
+            const currentSize = maxSize * pressure * 2; // 필압에 따른 굵기 가중치
+
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(e.offsetX, e.offsetY);
+            
+            ctx.strokeStyle = colorPicker.value;
+            ctx.lineWidth = currentSize;
+            ctx.lineCap = 'round'; // 선 끝을 둥글게 (부드러운 질감)
+            ctx.lineJoin = 'round';
+            
+            ctx.stroke();
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // 이벤트 리스너 (마우스, 터치, 펜 통합)
+        canvas.addEventListener('pointerdown', startDrawing);
+        canvas.addEventListener('pointermove', draw);
+        canvas.addEventListener('pointerup', stopDrawing);
+        canvas.addEventListener('pointerout', stopDrawing);
+        
+        window.addEventListener('resize', resizeCanvas);
+        sizePicker.addEventListener('input', () => sizeValue.innerText = `Max: ${sizePicker.value}px`);
+
+        // 초기 실행
+        resizeCanvas();
+    </script>
+</body>
+</html>
